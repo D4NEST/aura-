@@ -1,0 +1,57 @@
+{
+  "songs": [
+    { "genre": "trap", "emotion": "tristeza", "bpm": 140, "bars": 12, "file": "loops/trap/trap_tristeza_140.wav" },
+    { "genre": "trap", "emotion": "ira", "bpm": 150, "bars": 12, "file": "loops/trap/trap_ira_150.wav" },
+    { "genre": "reggaeton", "emotion": "tristeza", "bpm": 92, "bars": 8, "file": "loops/reggaeton/reggaeton_tristeza_92.wav" },
+    {
+      "genre": "trap",
+      "kit": {
+        "kick": "loops/trap/kick.wav",
+        "snare": "loops/trap/snare.wav",
+        "hat": "loops/trap/hat.wav",
+        "openhat": "loops/trap/openhat.wav",
+        "perc": "loops/trap/perc.wav"
+      }
+    },
+    {
+      "genre": "rap",
+      "kit": {
+        "kick": "loops/rap/kick.wav",
+        "snare": "loops/rap/snare.wav",
+        "hat": "loops/rap/hat.wav",
+        "openhat": "loops/rap/openhat.wav",
+        "perc": "loops/rap/perc.wav"
+      }
+    },
+    {
+      "genre": "reggaeton",
+      "kit": {
+        "kick": "loops/reggaeton/kick.wav",
+        "snare": "loops/reggaeton/snare.wav",
+        "hat": "loops/reggaeton/hat.wav",
+        "openhat": "loops/reggaeton/openhat.wav",
+        "perc": "loops/reggaeton/perc.wav"
+      }
+    },
+    {
+      "genre": "detroit",
+      "kit": {
+        "kick": "loops/detroit/kick.wav",
+        "snare": "loops/detroit/snare.wav",
+        "hat": "loops/detroit/hat.wav",
+        "openhat": "loops/detroit/openhat.wav",
+        "perc": "loops/detroit/perc.wav"
+      }
+    },
+    {
+      "genre": "plug",
+      "kit": {
+        "kick": "loops/plug/kick.wav",
+        "snare": "loops/plug/snare.wav",
+        "hat": "loops/plug/hat.wav",
+        "openhat": "loops/plug/openhat.wav",
+        "perc": "loops/plug/perc.wav"
+      }
+    }
+  ]
+}

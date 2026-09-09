@@ -1,0 +1,154 @@
+{
+  "generated": "2026-09-09T19:44:35.317Z",
+  "engine": [
+    {
+      "genre": "trap",
+      "is_coherent": true,
+      "engine_adjustments": []
+    },
+    {
+      "genre": "rap",
+      "is_coherent": true,
+      "engine_adjustments": []
+    },
+    {
+      "genre": "plug",
+      "is_coherent": true,
+      "engine_adjustments": []
+    },
+    {
+      "genre": "detroit",
+      "is_coherent": true,
+      "engine_adjustments": []
+    },
+    {
+      "genre": "reggaeton",
+      "is_coherent": true,
+      "engine_adjustments": []
+    }
+  ],
+  "catalog": {
+    "reggaeton": {
+      "files": 54,
+      "coherent": 9,
+      "coherent_pct": 16.7,
+      "avg_bpm": 96,
+      "avg_perceived_bpm": 96,
+      "snare_histogram": {
+        "1": 6,
+        "3": 7,
+        "4": 21,
+        "5": 5,
+        "6": 2,
+        "7": 23,
+        "8": 1,
+        "9": 1,
+        "10": 4,
+        "11": 5,
+        "12": 21,
+        "13": 5,
+        "14": 1,
+        "15": 23
+      }
+    },
+    "plug": {
+      "files": 177,
+      "coherent": 27,
+      "coherent_pct": 15.3,
+      "avg_bpm": 120,
+      "avg_perceived_bpm": 60,
+      "snare_histogram": {
+        "1": 9,
+        "2": 1,
+        "3": 2,
+        "4": 4,
+        "5": 12,
+        "6": 2,
+        "7": 5,
+        "9": 30,
+        "10": 3,
+        "11": 7,
+        "12": 5,
+        "13": 15,
+        "14": 3,
+        "15": 6,
+        "16": 2
+      }
+    },
+    "rap": {
+      "files": 61,
+      "coherent": 17,
+      "coherent_pct": 27.9,
+      "avg_bpm": 94,
+      "avg_perceived_bpm": 94,
+      "snare_histogram": {
+        "1": 5,
+        "2": 1,
+        "3": 4,
+        "4": 6,
+        "5": 26,
+        "6": 3,
+        "7": 9,
+        "8": 4,
+        "9": 3,
+        "10": 4,
+        "11": 7,
+        "12": 5,
+        "13": 29,
+        "14": 2,
+        "15": 14,
+        "16": 4
+      }
+    },
+    "trap": {
+      "files": 122,
+      "coherent": 68,
+      "coherent_pct": 55.7,
+      "avg_bpm": 131,
+      "avg_perceived_bpm": 66,
+      "snare_histogram": {
+        "1": 17,
+        "2": 1,
+        "3": 16,
+        "4": 9,
+        "5": 14,
+        "6": 5,
+        "7": 17,
+        "8": 4,
+        "9": 71,
+        "10": 2,
+        "11": 13,
+        "12": 12,
+        "13": 26,
+        "14": 5,
+        "15": 28,
+        "16": 1
+      }
+    },
+    "detroit": {
+      "files": 48,
+      "coherent": 25,
+      "coherent_pct": 52.1,
+      "avg_bpm": 177,
+      "avg_perceived_bpm": 89,
+      "snare_histogram": {
+        "1": 6,
+        "3": 2,
+        "4": 1,
+        "5": 7,
+        "6": 1,
+        "7": 1,
+        "9": 26,
+        "10": 1,
+        "11": 4,
+        "12": 2,
+        "13": 10,
+        "14": 1,
+        "15": 6,
+        "16": 1
+      }
+    }
+  },
+  "total_files": 462,
+  "total_coherent": 146
+}

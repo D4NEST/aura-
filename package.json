@@ -1,0 +1,37 @@
+{
+  "name": "aura-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc --noEmit",
+    "verify": "tsx scripts/verify_core.ts",
+    "ingest": "tsx scripts/ingest_dataset.ts",
+    "ingest:flp": "tsx scripts/ingest_flp.ts",
+    "check:flp": "tsx scripts/check_flp.ts",
+    "validate:flp": "tsx scripts/validate_progressions.ts",
+    "learn:velocities": "tsx scripts/learn_velocities.ts",
+    "learn:groove": "tsx scripts/learn_groove.ts",
+    "learn:ranges": "tsx scripts/learn_ranges.ts",
+    "learn:harmony": "tsx scripts/learn_harmony.ts",
+    "validate:rhythm": "tsx scripts/rhythm_validator.ts"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tone": "^14.7.77"
+  },
+  "devDependencies": {
+    "@tonejs/midi": "^2.0.28",
+    "@types/node": "^26.5.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^1.3.0"
+  }
+}
