@@ -377,10 +377,18 @@ export interface ChordPulseConfig {
   dur16: number
   sustain: boolean
   accentVel: number
+  swing?: Record<number, number> // step -> fracción de 1/16 de swing adicional
 }
 
 export const CHORD_PULSE: Partial<Record<Genre, ChordPulseConfig>> = {
-  reggaeton: { steps: [1, 4], cycle4: [9, 9, 7, 7], dur16: 0.5, sustain: false, accentVel: 14 },
+  reggaeton: {
+    steps: [1, 4],
+    cycle4: [9, 9, 7, 7],
+    dur16: 0.75, // más largo que 0.5 para que suene "pulsado" no cortado
+    sustain: false,
+    accentVel: 14,
+    swing: { 4: 0.08, 12: 0.08 }, // swing en los golpes "y" para feel latino
+  },
 }
 
 /**
@@ -402,4 +410,116 @@ export const BASS_PATTERNS: Record<Genre, BassPatternConfig> = {
   plug: { steps: [1, 9], dur16: 2, glide: true, octaveJump: true }, // Zaytoven octavas
   detroit: { steps: [1, 5, 9, 13], dur16: 0.5, glide: false }, // donk staccato
   reggaeton: { steps: [1, 4, 7, 10], dur16: 0.75, glide: false }, // bajo dembow
+}
+
+/**
+ * Patrones de fill de batería por género y rol de sección.
+ * Cada fill es un array de {step, instrumento, velocity} en los últimos 4 pasos del compás.
+ * El rol define qué tan denso es el fill (coro denso, verso sutil, intro sin fill).
+ */
+export interface FillHit {
+  step: number // 12-15 (últimos 4 pasos del compás)
+  inst: 'snare' | 'kick' | 'hat' | 'perc'
+  velBoost: number // incremento de velocity
+}
+
+export interface FillPatternConfig {
+  hits: FillHit[]
+  weight: number // peso para que el fill se use en ciertos roles
+}
+
+export const FILL_PATTERNS: Record<Genre, Record<string, FillPatternConfig>> = {
+  trap: {
+    roll: {
+      hits: [
+        { step: 12, inst: 'snare', velBoost: 8 },
+        { step: 13, inst: 'snare', velBoost: 12 },
+        { step: 14, inst: 'snare', velBoost: 16 },
+        { step: 15, inst: 'snare', velBoost: 20 },
+        { step: 13, inst: 'hat', velBoost: 4 },
+        { step: 15, inst: 'hat', velBoost: 4 },
+      ],
+      weight: 1,
+    },
+    minimal: {
+      hits: [
+        { step: 15, inst: 'snare', velBoost: 10 },
+        { step: 14, inst: 'perc', velBoost: 6 },
+      ],
+      weight: 0.3,
+    },
+  },
+  rap: {
+    classic: {
+      hits: [
+        { step: 12, inst: 'snare', velBoost: 6 },
+        { step: 14, inst: 'snare', velBoost: 8 },
+        { step: 15, inst: 'hat', velBoost: 4 },
+      ],
+      weight: 1,
+    },
+    ghost: {
+      hits: [
+        { step: 13, inst: 'snare', velBoost: -10 },
+        { step: 15, inst: 'kick', velBoost: 4 },
+      ],
+      weight: 0.4,
+    },
+  },
+  plug: {
+    soft: {
+      hits: [
+        { step: 14, inst: 'snare', velBoost: 6 },
+        { step: 15, inst: 'hat', velBoost: 3 },
+      ],
+      weight: 1,
+    },
+    none: {
+      hits: [],
+      weight: 0.5,
+    },
+  },
+  detroit: {
+    aggressive: {
+      hits: [
+        { step: 12, inst: 'snare', velBoost: 15 },
+        { step: 13, inst: 'snare', velBoost: 15 },
+        { step: 14, inst: 'snare', velBoost: 15 },
+        { step: 15, inst: 'snare', velBoost: 20 },
+        { step: 12, inst: 'hat', velBoost: 8 },
+        { step: 14, inst: 'hat', velBoost: 8 },
+      ],
+      weight: 1,
+    },
+    triple: {
+      hits: [
+        { step: 13, inst: 'snare', velBoost: 12 },
+        { step: 14, inst: 'snare', velBoost: 12 },
+        { step: 15, inst: 'snare', velBoost: 16 },
+      ],
+      weight: 0.6,
+    },
+  },
+  reggaeton: {
+    break: {
+      hits: [
+        { step: 12, inst: 'perc', velBoost: 10 },
+        { step: 14, inst: 'perc', velBoost: 10 },
+      ],
+      weight: 1,
+    },
+    silence: {
+      hits: [], // el fill es silencio dramático
+      weight: 0.7,
+    },
+  },
+}
+
+// Pesos de fill por rol de sección (qué tan probable es usar fill denso)
+export const FILL_WEIGHT_BY_ROLE: Record<string, number> = {
+  intro: 0.1, // casi sin fills
+  pre: 0.6,
+  coro: 1.0, // fills densos
+  estrofa: 0.4,
+  outro: 0.8,
 }

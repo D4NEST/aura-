@@ -1,12 +1,4 @@
-node_modules/
-dist/
-.tmp-verify/
-*.log
-
-# Samples de packs con licencia (DJ Nelson, Dope Drums, etc.): NO van al repo.
-# Se mantiene el piano propio grabado por el productor.
-public/loops/**/*.wav
-!public/loops/piano.wav
-
-# Referencias MIDI externas (licencia aparte)
-dataset/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store

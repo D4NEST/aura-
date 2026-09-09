@@ -48,7 +48,7 @@ El BPM se puede **editar en cualquier momento** (input numérico + slider +
 presets en Crear y Pro). Si el usuario lo toca, "Crear beat" lo respeta; si
 no, usa el del mood automáticamente.
 
-### Punteo de piano (nuevo, reggaetón)
+### Punteo de piano (reggaetón, mejorado sesión #13)
 
 Antes el acorde era **un bloque sostenido**; ahora los géneros con
 `CHORD_PULSE` tocan **golpes cortos del mismo voicing** (estilo "punteo/
@@ -57,13 +57,58 @@ retorno" de reggaetón):
 - `steps`: golpes fijos del compás (1 y 4 → downbeat + "y" de la negra).
 - `cycle4`: golpe extra por compás dentro de un ciclo de 4 (reggaetón:
   `9,9,7,7`), avanzando con el compás absoluto de la sección.
-- `dur16`: duración en 1/16 (0.5 → staccato 1/32).
+- `dur16`: duración en 1/16 (**0.75** → staccato medio, más "pulsado").
 - `accentVel`: refuerzo de velocity para que corte sobre el dembow.
+- `swing`: **nuevo** — desplazamiento adicional en steps 4 y 12 para feel latino.
 
 Regla aprendida del MIDI de referencia en `dataset/reggaeton/Bm/` (98 BPM,
 B menor, 84 compases). Verificado: en 24 compases generados los golpes caen en
 steps 1 y 4 en todos los compases y 7/9 en ciclo 9,9,7,7 (288 notas, dur
 24–60 ticks, vel 65–127).
+
+### Bajo rítmico por género (nuevo, sesión #13)
+
+Antes el bajo era **una nota por acorde**; ahora cada género tiene su patrón
+rítmico aprendido del catálogo real:
+
+| género | patrón | descripción |
+| --- | --- | --- |
+| trap | `[1]` dur16=4, glide | 808 largo con portamento entre acordes |
+| rap | `[1,5,9,13]` dur16=1 | boombap con notas intermedias |
+| plug | `[1,9]` dur16=2, octaveJump | Zaytoven octavas con salto |
+| detroit | `[1,5,9,13]` dur16=0.5 | donk staccato rápido |
+| reggaetón | `[1,4,7,10]` dur16=0.75 | bajo dembow síncopado |
+
+**Resultado**: bajo pasó de 27 a 68 notas en verify (2.5x más movimiento).
+
+### Fills dinámicos por género y sección (nuevo, sesión #13)
+
+Antes todos los géneros usaban el mismo fill genérico (snare roll en últimos
+4 pasos). Ahora cada género tiene 2 tipos de fill, seleccionados por peso
+según el rol de la sección:
+
+| género | fills | peso por rol |
+| --- | --- | --- |
+| trap | `roll` (creciente), `minimal` | coro 1.0, intro 0.1 |
+| rap | `classic` (snare+hat), `ghost` | coro 1.0, estrofa 0.4 |
+| plug | `soft`, `none` | coro 1.0, intro 0.1 |
+| detroit | `aggressive`, `triple` | coro 1.0, outro 0.8 |
+| reggaetón | `break` (perc), `silence` | coro 1.0, pre 0.6 |
+
+### Motivos melódicos en lead (nuevo, sesión #13)
+
+El lead ahora usa **frases melódicas** en lugar de notas sueltas. Cada género
+tiene 2-3 patrones de motivos que se repiten con variaciones:
+
+| género | motivos |
+| --- | --- |
+| trap | `[0,2,4,2]`, `[0,4,7,4]` — arpegios cortos |
+| rap | `[0,2,4,5,4]`, `[0,4,2,0]` — frases de 5 notas |
+| plug | `[0,4,7,4]` — acordes arpegiados |
+| detroit | `[0,3,5,7,5]`, `[0,7,5,3]` — escalas rápidas |
+| reggaetón | `[0,4,5,4]`, `[0,2,4,2,0]` — patrones latinos |
+
+**Resultado**: lead de 147 a 165 notas con frases más coherentes.
 
 ## Batería real: 3 capas (ver `docs/sample_bank.md`)
 
@@ -116,9 +161,8 @@ rap 28%, reggaetón 17%, plug 15% (el dembow real varía mucho).
 
 ## Próximos pasos
 
-- Escuchar el reggaetón a 98 BPM en B menor contra el MIDI de referencia y
-  afinar voicing/articulación del punteo (el "retorno").
-- Aplicar `CHORD_PULSE` a más géneros (trap/plug) con reglas propias.
-- Bajo con movimiento rítmico por género (hoy es nota larga por acorde).
-- Fills variados por sección; compás "bailado" (desplazamiento del downbeat).
-- Render a audio (WAV/MP3) desde el MIDI.
+- Render a audio (WAV/MP3) desde el MIDI (OfflineAudioContext).
+- Buses y compresión por género para mezcla con más carácter.
+- Aplicar `CHORD_PULSE` a más géneros (trap stabs, plug arpegios).
+- Integrar checklist de normalidad al validator automático.
+- Compás "bailado" (desplazamiento del downbeat para más groove).

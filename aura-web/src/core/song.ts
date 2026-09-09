@@ -1,5 +1,5 @@
 import type { Section, SectionProgression, SongResult, Track, Note, Rng } from './types'
-import { ESCALAS, DRUM_PATTERNS, DRUM_MAP, NOTE_OFFSETS, VELOCITIES, GROOVE, RANGES, HARMONIC_RHYTHM, CHORD_PULSE, BASS_PATTERNS } from './constants'
+import { ESCALAS, DRUM_PATTERNS, DRUM_MAP, NOTE_OFFSETS, VELOCITIES, GROOVE, RANGES, HARMONIC_RHYTHM, CHORD_PULSE, BASS_PATTERNS, FILL_PATTERNS, FILL_WEIGHT_BY_ROLE } from './constants'
 import {
   noteFromDegree,
   chordFromDegree,
@@ -88,13 +88,15 @@ export function generateSong(
             for (const step of steps) {
               finalChord.forEach((note, i) => {
                 const strum = i * 12
+                // Swing adicional por step (para feel latino en reggaetón)
+                const pulseSwing = pulse.swing?.[step] ? pulse.swing[step] * ticksPer16th : 0
                 const swing = microOffset(
                   groove.groove.harmony,
                   step - 1,
                   ticksPer16th,
                   groove.humanize,
                   rng,
-                )
+                ) + pulseSwing
                 chords.push({
                   tick:
                     sectionTick + barIdx * ticksPerBar +
@@ -157,6 +159,8 @@ export function generateSong(
     }
 
     const pattern = DRUM_PATTERNS[section.genre] ?? DRUM_PATTERNS.trap
+    const fillsByGenre = FILL_PATTERNS[section.genre] ?? FILL_PATTERNS.trap
+    const fillWeight = FILL_WEIGHT_BY_ROLE[section.role ?? 'estrofa'] ?? 0.5
     const drumTick = currentSectionTick
     for (let bar = 0; bar < section.bars; bar++) {
       const isLastBar = bar === section.bars - 1
@@ -164,32 +168,30 @@ export function generateSong(
         const stepTick =
           drumTick + bar * ticksPerBar + step * ticksPer16th +
           microOffset(groove.groove.drums, step, ticksPer16th, groove.humanize, rng)
-        if (isLastBar && step >= 12) {
-          const snare = DRUM_MAP.snare
-          const perc = DRUM_MAP.perc
-          drums.push({
-            tick: stepTick,
-            dur: ticksPer16th - 5,
-            note: snare,
-            velocity: humanVelocity(
-              vels.drums.snare?.mean ?? 96,
-              (vels.drums.snare?.jitter ?? 10) + 4,
-              rng,
-            ),
-          })
-          if (step % 2 === 0) {
-            drums.push({
-              tick: stepTick,
-              dur: ticksPer16th - 5,
-              note: perc,
-              velocity: humanVelocity(
-                vels.drums.perc?.mean ?? 96,
-                (vels.drums.perc?.jitter ?? 10) + 4,
-                rng,
-              ),
-            })
+
+        // Fill dinámico según género y rol
+        if (isLastBar && step >= 12 && rng() < fillWeight) {
+          // Elegir un fill del género basado en peso
+          const fillNames = Object.keys(fillsByGenre)
+          const fillKey = fillNames[Math.floor(rng() * fillNames.length)]
+          const fill = fillsByGenre[fillKey]
+
+          // Aplicar hits del fill que coinciden con el step actual
+          for (const hit of fill.hits) {
+            if (hit.step === step) {
+              const pitch = DRUM_MAP[hit.inst]
+              const baseVel = vels.drums[hit.inst === 'snare' ? 'snare' : hit.inst === 'kick' ? 'kick' : hit.inst === 'hat' ? 'hat' : 'perc']?.mean ?? 96
+              const jitter = vels.drums[hit.inst === 'snare' ? 'snare' : hit.inst === 'kick' ? 'kick' : hit.inst === 'hat' ? 'hat' : 'perc']?.jitter ?? 10
+              drums.push({
+                tick: stepTick,
+                dur: ticksPer16th - 5,
+                note: pitch,
+                velocity: humanVelocity(baseVel + hit.velBoost, jitter, rng),
+              })
+            }
           }
-        } else {
+        } else if (!isLastBar || step < 12) {
+          // Patrón normal de batería
           for (const [inst, pat] of Object.entries(pattern)) {
             if (pat[step] === 1) {
               const prof = vels.drums[inst as 'kick' | 'snare' | 'hat' | 'open_hat' | 'perc']
