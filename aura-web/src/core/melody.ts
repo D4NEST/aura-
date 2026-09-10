@@ -1,6 +1,6 @@
 import type { Emotion, Genre, Note, Rng } from './types'
 import { LEAD_DENSITY, VELOCITIES, GROOVE, RANGES } from './constants'
-import { noteFromDegree, chordFromDegree } from './harmony'
+import { noteFromDegree } from './harmony'
 import { humanVelocity, microOffset, withinRange } from './humanize'
 
 /**

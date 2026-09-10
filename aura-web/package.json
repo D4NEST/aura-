@@ -16,7 +16,11 @@
     "learn:groove": "tsx scripts/learn_groove.ts",
     "learn:ranges": "tsx scripts/learn_ranges.ts",
     "learn:harmony": "tsx scripts/learn_harmony.ts",
-    "validate:rhythm": "tsx scripts/rhythm_validator.ts"
+    "validate:rhythm": "tsx scripts/rhythm_validator.ts",
+    "analyze:drums": "tsx scripts/analyze_drums.ts",
+    "analyze:key": "tsx scripts/analyze_key.ts",
+    "audit:matrix": "tsx scripts/audit_matrix.ts",
+    "synth:test-loop": "tsx scripts/synth_test_loop.ts"
   },
   "dependencies": {
     "react": "^18.3.1",

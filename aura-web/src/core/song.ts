@@ -1,11 +1,13 @@
-import type { Section, SectionProgression, SongResult, Track, Note, Rng } from './types'
-import { ESCALAS, DRUM_PATTERNS, DRUM_MAP, NOTE_OFFSETS, VELOCITIES, GROOVE, RANGES, HARMONIC_RHYTHM, CHORD_PULSE, BASS_PATTERNS, FILL_PATTERNS, FILL_WEIGHT_BY_ROLE } from './constants'
+import type { Section, SectionProgression, SongResult, Track, Note, Rng, Mode } from './types'
+import { ESCALAS, DRUM_PATTERNS, DRUM_VARIANTS, DRUM_MAP, NOTE_OFFSETS, VELOCITIES, GROOVE, RANGES, HARMONIC_RHYTHM, CHORD_PULSE, BASS_PATTERNS, FILL_PATTERNS, FILL_WEIGHT_BY_ROLE, PRODUCTION_RECIPES, MODE_SCALES, GENRE_DEFAULT_MODE, VOICE_VELOCITY_DEFAULT } from './constants'
 import {
   noteFromDegree,
   chordFromDegree,
-  applyInversion,
   applyTensionRules,
   selectProgression,
+  nearestInversion,
+  rootlessVoicing,
+  voiceVelocityFor,
 } from './harmony'
 import { generateLead } from './melody'
 import { humanVelocity, microOffset, withinRange, pickWeighted } from './humanize'
@@ -15,6 +17,7 @@ export function generateSong(
   rootKey = 'C',
   _tempo = 140,
   ticksPerBeat = 480,
+  mode?: Mode,
   rng: Rng = Math.random,
 ): SongResult {
   const ticksPer16th = ticksPerBeat / 4
@@ -37,9 +40,18 @@ export function generateSong(
   }
 
   for (const section of songStructure) {
-    const scale = ESCALAS[section.emotion]
-    const pick = selectProgression(section.emotion, rng)
+    // Modo explícito del motor: si está definido (mayor/menor) manda sobre la
+    // emoción; si no, cada género tiene su modo por defecto (matriz de producción).
+    const effectiveMode: Mode = mode ?? GENRE_DEFAULT_MODE[section.genre]
+    const scale = MODE_SCALES[effectiveMode] ?? ESCALAS[section.emotion]
+    const pick = selectProgression(section.emotion, rng, { mode: effectiveMode, genre: section.genre })
     let progression = pick.progression
+    const recipe = PRODUCTION_RECIPES[section.genre]
+    if (recipe?.alternate2 && progression.length > 2) {
+      // Receta Detroit: 2 acordes que alternan (I–V). El loop de compases
+      // recorre la progresión cíclicamente, así [A, B] → A B A B ...
+      progression = progression.slice(0, 2)
+    }
     progressions.push({
       name: section.name,
       role: section.role,
@@ -53,11 +65,15 @@ export function generateSong(
     const vels = VELOCITIES[section.genre]
     const groove = GROOVE[section.genre]
     const ranges = RANGES[section.genre]
-    const harmonic = chordBarsByRole[section.role ?? ''] ?? HARMONIC_RHYTHM[section.genre]
+    const harmonic =
+      recipe?.chordBarsOverride ??
+      chordBarsByRole[section.role ?? ''] ??
+      HARMONIC_RHYTHM[section.genre]
 
     let barCount = 0
     let sectionTick = currentSectionTick
     let absBar = 0
+    let prevChord: number[] | undefined = undefined
 
     while (barCount < section.bars) {
       for (const degree of progression) {
@@ -68,15 +84,27 @@ export function generateSong(
         if (barCount + chordBars > section.bars) chordBars = section.bars - barCount
         const durationTicks = chordBars * ticksPerBar
 
+        // Compás de paso/girarrondo (barra 4 de la frase): 9na/11na +10% de volumen.
+        const isTurnaround = barCount % 4 === 3
+        const wantTurnaround = recipe?.turnaroundExtension ?? true
+        const add11 = isTurnaround && wantTurnaround
+        const velBoost = isTurnaround && wantTurnaround ? 10 : 0
+
         const add7 = section.emotion === 'amor' || section.emotion === 'nostalgia'
         const add9 = section.emotion === 'tristeza' || section.emotion === 'amor'
-        const rawChord = chordFromDegree(scale, degree, rootOffset, add7, add9)
-        const invPool: ('root' | 'first' | 'second' | 'open' | 'drop2')[] = [
-          'root', 'first', 'second', 'open', 'drop2',
-        ]
-        const invType = invPool[Math.floor(rng() * invPool.length)]
-        const invChord = applyInversion(rawChord, invType)
-        const finalChord = applyTensionRules(invChord, section.emotion)
+        const rawChord = chordFromDegree(scale, degree, rootOffset, add7, add9, add11)
+        // Voice leading: inversión con el mínimo movimiento de semitonos desde el acorde previo.
+        const voiced = nearestInversion(rawChord, prevChord, rng)
+        const invChord = applyTensionRules(voiced, section.emotion)
+        const rootMidi = rawChord[0] & 0x7f
+        // Rootless: el bajo/sub-synth sostiene la fundamental; no duplicarla en el acorde.
+        const playChord = recipe?.rootlessVoicing
+          ? rootlessVoicing(invChord, rootMidi)
+          : invChord
+        prevChord = playChord
+        const rootClass = rootMidi % 12
+        const velProf = recipe?.velocityProfile ?? VOICE_VELOCITY_DEFAULT
+        const strumTicks = recipe?.strumTicks ?? 12
 
         const pulse = CHORD_PULSE[section.genre]
         if (pulse) {
@@ -86,8 +114,8 @@ export function generateSong(
             const extra = pulse.cycle4[(absBar + barIdx) % pulse.cycle4.length] ?? 0
             const steps = extra ? [...pulse.steps, extra] : pulse.steps
             for (const step of steps) {
-              finalChord.forEach((note, i) => {
-                const strum = i * 12
+              playChord.forEach((note, i) => {
+                const strum = i * strumTicks
                 // Swing adicional por step (para feel latino en reggaetón)
                 const pulseSwing = pulse.swing?.[step] ? pulse.swing[step] * ticksPer16th : 0
                 const swing = microOffset(
@@ -103,24 +131,27 @@ export function generateSong(
                     (step - 1) * ticksPer16th + swing + strum,
                   dur: Math.max(1, pulse.dur16 * ticksPer16th - strum),
                   note: withinRange(note & 0x7f, ranges.chords),
-                  velocity: humanVelocity(
-                    vels.chords.mean + pulse.accentVel,
-                    vels.chords.jitter,
-                    rng,
+                  velocity: Math.min(
+                    127,
+                    voiceVelocityFor(note, i === playChord.length - 1, rootClass, velProf, rng) +
+                      pulse.accentVel + velBoost,
                   ),
                 })
               })
             }
           }
         } else {
-          finalChord.forEach((note, i) => {
-            const strum = i * 12
+          playChord.forEach((note, i) => {
+            const strum = i * strumTicks
             const swing = microOffset(groove.groove.harmony, 0, ticksPer16th, groove.humanize, rng)
             chords.push({
               tick: sectionTick + swing + strum,
               dur: durationTicks - 20 - strum,
               note: withinRange(note & 0x7f, ranges.chords),
-              velocity: humanVelocity(vels.chords.mean, vels.chords.jitter, rng),
+              velocity: Math.min(
+                127,
+                voiceVelocityFor(note, i === playChord.length - 1, rootClass, velProf, rng) + velBoost,
+              ),
             })
           })
         }
@@ -158,7 +189,13 @@ export function generateSong(
       }
     }
 
-    const pattern = DRUM_PATTERNS[section.genre] ?? DRUM_PATTERNS.trap
+    const darkMood = section.emotion === 'tristeza' || section.emotion === 'decepcion' || section.emotion === 'nostalgia'
+    // No tan cuadrados: los moods oscuros usan sincopado casi siempre (80%),
+    // pero los de energía también caen en la estética sincopada a veces (25%).
+    const flavorRoll = rng()
+    const useDark = darkMood ? flavorRoll < 0.8 : flavorRoll < 0.25
+    const variant = useDark ? DRUM_VARIANTS[section.genre]?.dark : undefined
+    const pattern = { ...(DRUM_PATTERNS[section.genre] ?? DRUM_PATTERNS.trap), ...(variant ?? {}) }
     const fillsByGenre = FILL_PATTERNS[section.genre] ?? FILL_PATTERNS.trap
     const fillWeight = FILL_WEIGHT_BY_ROLE[section.role ?? 'estrofa'] ?? 0.5
     const drumTick = currentSectionTick

@@ -1,5 +1,6 @@
 export type Emotion = 'tristeza' | 'ira' | 'amor' | 'decepcion' | 'nostalgia'
 export type Genre = 'trap' | 'rap' | 'plug' | 'detroit' | 'reggaeton'
+export type Mode = 'mayor' | 'menor'
 export type Rng = () => number
 
 export interface Section {
@@ -31,7 +32,7 @@ export interface SectionProgression {
   genre: Genre
   bars: number
   progression: number[]
-  source: 'principal' | 'alternativa' | 'real'
+  source: 'principal' | 'alternativa' | 'real' | 'genre'
   mutated: boolean
 }
 

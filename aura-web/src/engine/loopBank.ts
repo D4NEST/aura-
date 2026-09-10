@@ -64,16 +64,27 @@ export async function resolveDrumBank(
   const entries = await loadManifest()
   const bank: DrumBank = {}
 
-  const loop = entries.find(
-    (e) =>
-      e.file &&
-      e.genre === genre &&
-      e.emotion === emotion &&
-      e.bpm === bpm &&
-      e.bars,
+  const loops = entries.filter(
+    (e) => e.file && e.genre === genre && e.emotion === emotion && e.bars,
   )
-  if (loop) {
-    bank.loop = { file: loop.file!, bpm: loop.bpm!, bars: loop.bars! }
+  // Loop con BPM exacto, o el más cercano dentro de ±12% (evita saltos de camino
+  // cuando el usuario toca el BPM y mantiene la batería real en 92/95/98...).
+  let loop: LoopEntry | undefined
+  if (bpm) {
+    loop =
+      loops.find((e) => e.bpm === bpm) ??
+      loops
+        .filter((e) => e.bpm && Math.abs(e.bpm - bpm) / e.bpm <= 0.12)
+        .sort((a, b) => {
+          const da = Math.abs((a.bpm ?? 0) - bpm)
+          const db = Math.abs((b.bpm ?? 0) - bpm)
+          return da - db
+        })[0]
+  } else {
+    loop = loops[0]
+  }
+  if (loop?.file) {
+    bank.loop = { file: loop.file, bpm: loop.bpm ?? bpm ?? 0, bars: loop.bars ?? 4 }
   }
 
   const kit = entries.find((e) => e.kit && e.genre === genre)

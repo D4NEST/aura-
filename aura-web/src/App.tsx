@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { generateSong, buildSongMidi, buildStemMidi, downloadMidi } from './core'
 import { buildCasualStructure } from './core/structure'
 import { MOODS_PER_GENRE } from './core/constants'
@@ -50,6 +50,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [lengthSec, setLengthSec] = useState(0)
+  const [sampleWarning, setSampleWarning] = useState<string | null>(null)
   const playerRef = useRef<AuraPlayer | null>(null)
   const songRef = useRef<SongResult | null>(null)
   const tempoRef = useRef(tempo)
@@ -64,6 +65,17 @@ export default function App() {
     const p = new AuraPlayer()
     playerRef.current = p
     return p
+  }, [])
+
+  useEffect(() => {
+    const onSampleError = (ev: Event) => {
+      const file = (ev as CustomEvent).detail?.file
+      setSampleWarning(
+        `Algunos samples no cargaron (${file ?? 'desconocido'}) — se usa el kit sintetizado.`,
+      )
+    }
+    window.addEventListener('aura:sample-error', onSampleError)
+    return () => window.removeEventListener('aura:sample-error', onSampleError)
   }, [])
 
   const prepareSong = useCallback((s: SongResult, t: number) => {
@@ -122,28 +134,35 @@ export default function App() {
 
   const createCasual = useCallback(async () => {
     setGenerating(true)
-    await stopPlayback()
-    const structure = buildCasualStructure(genre, mood, casualMode)
-    const moodTempo =
-      MOODS_PER_GENRE[genre].find((m: { emotion: Emotion }) => m.emotion === mood)?.tempo ??
-      tempoRef.current
-    const t = tempoTouchedRef.current ? tempoRef.current : moodTempo
-    if (!tempoTouchedRef.current) setTempo(moodTempo)
-    const s = generateSong(structure, root, t, 480)
-    prepareSong(s, t)
-    if (loop) applyLoop(true)
-    setGenerating(false)
-    loopKeyRef.current = { genre, mood, bpm: t }
-    const v = await player.play(
-      s,
-      t,
-      bundleRef.current,
-      true,
-      await resolveDrumBank(genre, mood, t),
-    )
-    if (loop) player.setLoop(lengthRef.current)
-    setVoices(v)
-    setPlaying(true)
+    setSampleWarning(null)
+    try {
+      await stopPlayback()
+      const structure = buildCasualStructure(genre, mood, casualMode)
+      const moodTempo =
+        MOODS_PER_GENRE[genre].find((m: { emotion: Emotion }) => m.emotion === mood)
+          ?.tempo ?? tempoRef.current
+      const t = tempoTouchedRef.current ? tempoRef.current : moodTempo
+      if (!tempoTouchedRef.current) setTempo(moodTempo)
+      const s = generateSong(structure, root, t, 480)
+      prepareSong(s, t)
+      if (loop) applyLoop(true)
+      loopKeyRef.current = { genre, mood, bpm: t }
+      const v = await player.play(
+        s,
+        t,
+        bundleRef.current,
+        true,
+        await resolveDrumBank(genre, mood, t),
+      )
+      if (loop) player.setLoop(lengthRef.current)
+      setVoices(v)
+      setPlaying(true)
+    } catch (e) {
+      console.error('[AURA] createCasual falló:', e)
+      await player.stop()
+    } finally {
+      setGenerating(false)
+    }
   }, [genre, mood, casualMode, root, loop, prepareSong, applyLoop, player, stopPlayback])
 
   const regenerate = useCallback(() => {
@@ -160,22 +179,28 @@ export default function App() {
       setVoices(null)
       return
     }
-    const v = await player.play(
-      s,
-      tempoRef.current,
-      bundle,
-      true,
-      mode === 'crear' && loopKeyRef.current
-        ? await resolveDrumBank(
-            loopKeyRef.current.genre,
-            loopKeyRef.current.mood,
-            loopKeyRef.current.bpm,
-          )
-        : null,
-    )
-    if (loop) player.setLoop(lengthRef.current)
-    setVoices(v)
-    setPlaying(true)
+    setSampleWarning(null)
+    try {
+      const v = await player.play(
+        s,
+        tempoRef.current,
+        bundle,
+        true,
+        mode === 'crear' && loopKeyRef.current
+          ? await resolveDrumBank(
+              loopKeyRef.current.genre,
+              loopKeyRef.current.mood,
+              loopKeyRef.current.bpm,
+            )
+          : null,
+      )
+      if (loop) player.setLoop(lengthRef.current)
+      setVoices(v)
+      setPlaying(true)
+    } catch (e) {
+      console.error('[AURA] togglePlay falló:', e)
+      await player.stop()
+    }
   }, [playing, player, bundle, loop, mode])
 
   const tap = useCallback(async (index: number) => {
@@ -367,6 +392,9 @@ export default function App() {
       )}
 
       <div className="dock">
+        {sampleWarning && (
+          <span className="dock-warn">{sampleWarning}</span>
+        )}
         <span className="dock-status">
           {playing
             ? `${mode === 'crear' ? `${genre} · ${mood}` : ''} ${root} · ${tempo} BPM`

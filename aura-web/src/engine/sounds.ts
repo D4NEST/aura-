@@ -121,9 +121,9 @@ export const BASS_PRESETS: PresetDef[] = [
       new Tone.MonoSynth({
         oscillator: { type: 'triangle' },
         filter: { type: 'lowpass', Q: 2, frequency: 1100 },
-        envelope: { attack: 0.005, decay: 0.5, sustain: 0.45, release: 0.3 },
+        envelope: { attack: 0.015, decay: 0.5, sustain: 0.45, release: 0.3 },
         filterEnvelope: {
-          attack: 0.005,
+          attack: 0.015,
           decay: 0.25,
           sustain: 0.4,
           release: 0.3,
@@ -139,9 +139,9 @@ export const BASS_PRESETS: PresetDef[] = [
       new Tone.MonoSynth({
         oscillator: { type: 'square' },
         filter: { type: 'lowpass', Q: 1, frequency: 900 },
-        envelope: { attack: 0.004, decay: 0.4, sustain: 0.6, release: 0.25 },
+        envelope: { attack: 0.012, decay: 0.4, sustain: 0.6, release: 0.25 },
         filterEnvelope: {
-          attack: 0.004,
+          attack: 0.012,
           decay: 0.2,
           sustain: 0.5,
           release: 0.2,
@@ -157,9 +157,9 @@ export const BASS_PRESETS: PresetDef[] = [
       new Tone.MonoSynth({
         oscillator: { type: 'sawtooth' },
         filter: { type: 'lowpass', Q: 3, frequency: 1600 },
-        envelope: { attack: 0.002, decay: 0.7, sustain: 0.0, release: 0.3 },
+        envelope: { attack: 0.008, decay: 0.7, sustain: 0.0, release: 0.3 },
         filterEnvelope: {
-          attack: 0.002,
+          attack: 0.008,
           decay: 0.3,
           sustain: 0.2,
           release: 0.2,
@@ -175,9 +175,9 @@ export const BASS_PRESETS: PresetDef[] = [
       new Tone.MonoSynth({
         oscillator: { type: 'square' },
         filter: { type: 'lowpass', Q: 5, frequency: 2600 },
-        envelope: { attack: 0.003, decay: 0.3, sustain: 0.3, release: 0.2 },
+        envelope: { attack: 0.008, decay: 0.3, sustain: 0.3, release: 0.2 },
         filterEnvelope: {
-          attack: 0.003,
+          attack: 0.008,
           decay: 0.2,
           sustain: 0.4,
           release: 0.15,
@@ -229,11 +229,11 @@ export const LEAD_PRESETS: PresetDef[] = [
 ]
 
 export const SOUND_DEFAULTS: Record<Genre, SoundBundle> = {
-  trap: { piano: 'rhodes', pad: 'warm', bass: 'sub', lead: 'pluck' },
-  rap: { piano: 'dx', pad: 'sabre', bass: 'sub', lead: 'mono' },
-  plug: { piano: 'dx', pad: 'strings', bass: 'retro', lead: 'pluck' },
+  trap: { piano: 'acoustic', pad: 'warm', bass: 'sub', lead: 'pluck' },
+  rap: { piano: 'acoustic', pad: 'sabre', bass: 'sub', lead: 'mono' },
+  plug: { piano: 'acoustic', pad: 'strings', bass: 'retro', lead: 'pluck' },
   detroit: { piano: 'clav', pad: 'warm', bass: 'dist', lead: 'saw' },
-  reggaeton: { piano: 'dx', pad: 'strings', bass: 'retro', lead: 'pluck' },
+  reggaeton: { piano: 'acoustic', pad: 'strings', bass: 'retro', lead: 'pluck' },
 }
 
 export interface PresetGroups {

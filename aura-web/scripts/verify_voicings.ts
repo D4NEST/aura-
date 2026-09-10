@@ -49,7 +49,7 @@ for (let k = 0; k < 40; k++) {
 
 const avgSpan = spans.reduce((a, b) => a + b, 0) / spans.length
 const maxSpan = Math.max(...spans)
-console.log(`Chords notas: ${minChord}..${maxChord} (previo esperado ~42..72)`)
+console.log(`Chords notas: ${minChord}..${maxChord} (registro actual ~55..87, separado del bajo)`)
 console.log(`Span medio por acorde: ${avgSpan.toFixed(1)} semitonos | max ${maxSpan}`)
 console.log(`Bass notas: ${minBass}..${maxBass}`)
-console.log(`OK si maxChord <= 72 y maxSpan <= 21 (VOICE_SPAN)`)
+console.log(`OK si maxChord <= 87 y maxSpan <= 21 (VOICE_SPAN)`)

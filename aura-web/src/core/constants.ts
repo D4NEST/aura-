@@ -1,5 +1,5 @@
 export type { Genre as GenreType } from './types'
-import type { Emotion, Genre, Mood } from './types'
+import type { Emotion, Genre, Mode, Mood } from './types'
 
 export const DRUM_MAP: Record<string, number> = {
   kick: 36,
@@ -15,6 +15,26 @@ export const ESCALAS: Record<Emotion, number[]> = {
   amor: [0, 2, 4, 5, 7, 9, 11],
   decepcion: [0, 1, 3, 5, 6, 8, 10],
   nostalgia: [0, 3, 5, 7, 10],
+}
+
+/**
+ * Modo explícito del motor (en qué tono estamos trabajando):
+ * - menor = menor natural (línea base del catálogo: tristeza/trap/rap/detroit/reggaetón)
+ * - mayor = mayor natural (base de plug y de los tonos alegres)
+ * Modo detectado con `scripts/analyze_key.ts` (tónica + mayor/menor) se alimenta directo aquí.
+ */
+export const MODE_SCALES: Record<Mode, number[]> = {
+  mayor: [0, 2, 4, 5, 7, 9, 11], // mayor natural
+  menor: [0, 2, 3, 5, 7, 8, 10], // menor natural
+}
+
+/** Modo por defecto de cada género (matriz de producción del productor). */
+export const GENRE_DEFAULT_MODE: Record<Genre, Mode> = {
+  trap: 'menor', // menor natural/harmónica/frigia
+  rap: 'menor', // menor dórica/natural/pentatónica
+  plug: 'mayor', // mayor natural/dórica/lidia
+  detroit: 'menor', // menor natural/cromática/locria
+  reggaeton: 'menor', // menor/mayor natural
 }
 
 export const PROGRESIONES: Record<
@@ -46,6 +66,19 @@ export const PROGRESIONES: Record<
     alternativa: [4, 1, 7, 1],
     reales: [[1, 4, 5, 4], [4, 1, 4, 5]],
   },
+}
+
+/**
+ * Progresiones "clave" por género, de la matriz de producción del productor
+ * (grados de escala: i=1, bII=2, III=3, iv=4, v=5, bVI/VI=6, bVII/VII=7).
+ * Se integran como fuente de selección con peso, junto a principal/alternativa/reales.
+ */
+export const GENRE_PROGRESSIONS: Record<Genre, number[][]> = {
+  trap: [[1, 6], [1, 2, 1], [1, 5, 6, 4]], // i-VI · i-bII-i · i-v-VI-IV
+  rap: [[2, 5, 1], [1, 4]], // ii7-V7-i7 · i7-IV7
+  plug: [[4, 3, 6], [4, 5, 3, 6]], // IVmaj7-iii7-vi7 · IVmaj7-V7-iii7-vi7
+  detroit: [[1, 6, 7], [1, 2, 1]], // i-bVI-bVII · riff cromático i-bII-i
+  reggaeton: [[1, 6, 3, 7], [1, 4, 7, 3], [1, 7, 6, 5]], // i-VI-III-VII · i-iv-VII-III · i-VII-VI-V
 }
 
 export const DRUM_PATTERNS: Record<Genre, Record<string, number[]>> = {
@@ -83,6 +116,33 @@ export const DRUM_PATTERNS: Record<Genre, Record<string, number[]>> = {
     hat: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
     open_hat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
     perc: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+  },
+}
+
+/**
+ * Variantes "dark" de batería (moods oscuros/textura: tristeza, decepción,
+ * nostalgia) con kicks sincopados del type-beat moderno (matriz del productor).
+ * La base queda four-on-floor (verificada 100% coherente contra el catálogo
+ * real) y se usa para moods de energía (ira, amor). Celdas ausentes = base.
+ */
+export const DRUM_VARIANTS: Partial<Record<Genre, Record<'dark', Record<string, number[]>>>> = {
+  trap: {
+    dark: { kick: [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0] }, // 1, 8, 11
+  },
+  rap: {
+    dark: { kick: [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0] }, // 1, 3, 11
+  },
+  plug: {
+    dark: {
+      kick: [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0], // 1, 7, 10
+      perc: [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0], // rimshots 4, 8, 12
+    },
+  },
+  detroit: {
+    dark: {
+      kick: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], // 1, 6, 11
+      snare: [0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0], // clap 9 + offbeat 4, 8, 12, 15
+    },
   },
 }
 
@@ -199,7 +259,7 @@ export const LEAD_DENSITY: Record<Genre, number> = {
   trap: 0.28,
   rap: 0.4,
   plug: 0.34,
-  detroit: 0.5,
+  detroit: 0.4, // el protagonista es el donk; el lead acompaña
   reggaeton: 0.36,
 }
 
@@ -327,27 +387,27 @@ export const RANGES: Record<
   { chords: RangeWindow; bass: RangeWindow; lead: RangeWindow }
 > = {
   trap: {
-    chords: { lo: 48, hi: 72 },
+    chords: { lo: 55, hi: 84 },
     bass: { lo: 36, hi: 50 },
     lead: { lo: 66, hi: 90 },
   },
   rap: {
-    chords: { lo: 48, hi: 80 },
+    chords: { lo: 55, hi: 87 },
     bass: { lo: 40, hi: 54 },
     lead: { lo: 68, hi: 82 },
   },
   plug: {
-    chords: { lo: 41, hi: 75 },
+    chords: { lo: 48, hi: 82 },
     bass: { lo: 42, hi: 52 },
     lead: { lo: 64, hi: 87 },
   },
   detroit: {
-    chords: { lo: 47, hi: 80 },
+    chords: { lo: 54, hi: 87 },
     bass: { lo: 38, hi: 48 },
     lead: { lo: 63, hi: 80 },
   },
   reggaeton: {
-    chords: { lo: 51, hi: 74 },
+    chords: { lo: 58, hi: 84 },
     bass: { lo: 36, hi: 50 },
     lead: { lo: 63, hi: 93 },
   },
@@ -388,6 +448,90 @@ export const CHORD_PULSE: Partial<Record<Genre, ChordPulseConfig>> = {
     sustain: false,
     accentVel: 14,
     swing: { 4: 0.08, 12: 0.08 }, // swing en los golpes "y" para feel latino
+  },
+  // Detroit (receta del productor): acordes a contratiempo ("y" de cada negra),
+  // el toque offbeat es lo que hace caminar el house; el pad aporta el sostenido.
+  detroit: {
+    steps: [3, 7, 11, 15],
+    cycle4: [0, 0, 0, 0],
+    dur16: 2, // punteado corto pero con cuerpo
+    sustain: false,
+    accentVel: 12,
+  },
+}
+
+/**
+ * Recetas de producción por género (extraídas de entrevista con el productor).
+ * Cada receta traduce decisiones musicales a parámetros del motor:
+ * - `chordBarsOverride`: duración fija de cada acorde (pesos de 1 a 4 compases).
+ * - `alternate2`: progresión de 2 acordes que alternan (feel I–V, frase 4-8 compases).
+ * - `leadDensity`: densidad del lead (menos con 1 = más protagonista el bajo).
+ * - `genreGains`: balance de mezcla por género (qué instrumento manda).
+ */
+export interface ProductionRecipe {
+  chordBarsOverride?: number[]
+  alternate2?: boolean
+  leadDensity?: number
+  genreGains?: { bass?: number; lead?: number; piano?: number }
+  strumTicks?: number
+  rootlessVoicing?: boolean
+  turnaroundExtension?: boolean
+  velocityProfile?: VoiceVelocityProfile
+  soundDesign?: SoundDesignConfig
+}
+
+/** Perfil por defecto de jerarquía de velocidades de las voces del acorde. */
+export interface VoiceVelocityProfile {
+  root: number
+  inner: number
+  extension: number
+  top: number
+  jitter: number
+}
+
+export const VOICE_VELOCITY_DEFAULT: VoiceVelocityProfile = {
+  root: 75, // 70-80%: peso del acorde
+  inner: 60, // 50-65%: armónica sin saturar
+  extension: 85, // 80-90%: acentúa la tensión
+  top: 95, // 90-100%: guía el oído
+  jitter: 5, // ±5% de variación
+}
+
+/** Matriz de definición de sonido (backend JSON): ataque, cuerpo, textura, espacio. */
+export interface SoundDesignConfig {
+  transient_attack: 'SHARP' | 'SOFT' | 'PADDED'
+  body: 'BRIGHT' | 'WARM_SATURATED' | 'DARK_FILTERED'
+  texture: 'CLEAN' | 'VINYL_CRACKLE' | 'TAPE_DETUNE' | 'BITCRUSHED'
+  cutoff_hz?: number
+  detune_lfo_depth?: 'NONE' | 'LOW' | 'MEDIUM'
+}
+
+export const PRODUCTION_RECIPES: Partial<Record<Genre, ProductionRecipe>> = {
+  trap: {
+    rootlessVoicing: true, // 808 marca la fundamental; el piano no la duplica
+    turnaroundExtension: true,
+    soundDesign: { transient_attack: 'SHARP', body: 'DARK_FILTERED', texture: 'CLEAN', cutoff_hz: 3000 },
+  },
+  rap: {
+    turnaroundExtension: true,
+    soundDesign: { transient_attack: 'SOFT', body: 'WARM_SATURATED', texture: 'TAPE_DETUNE', cutoff_hz: 3500 },
+  },
+  plug: {
+    strumTicks: 12,
+    turnaroundExtension: true,
+    soundDesign: { transient_attack: 'SOFT', body: 'WARM_SATURATED', texture: 'TAPE_DETUNE', detune_lfo_depth: 'LOW', cutoff_hz: 3500 },
+  },
+  detroit: {
+    chordBarsOverride: [0, 100, 0, 0], // 2 compases por acorde: frase espaciosa
+    alternate2: true, // 2 acordes que alternan (I–V), frase de 4-8 compases
+    leadDensity: 0.4,
+    genreGains: { bass: 0.95, lead: 0.7 }, // "el donk manda" = protagonista
+    rootlessVoicing: true,
+    soundDesign: { transient_attack: 'SHARP', body: 'BRIGHT', texture: 'CLEAN' },
+  },
+  reggaeton: {
+    rootlessVoicing: true, // sub-synth senoidal apoya al kick; no duplicar raíz
+    soundDesign: { transient_attack: 'SHARP', body: 'WARM_SATURATED', texture: 'CLEAN' },
   },
 }
 

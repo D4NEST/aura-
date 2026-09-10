@@ -32,25 +32,34 @@ const DEFAULT_BUNDLE: SoundBundle = {
   lead: 'pluck',
 }
 
+// Tone.js interpreta un número como frecuencia en Hz (no MIDI). Se convierte
+// el MIDI de las notas a Hz reales: acorde 60 => 261.6Hz (C4), al piano se le oye.
+const midiToHz = (m: number) => Tone.Frequency(Math.round(m), 'midi').toFrequency()
+
+// Balance "quién es el protagonista" según la receta de producción del género.
+// (receta detroit: el donk manda → bajo más arriba, lead más discreto)
+const GENRE_BASS_GAIN: Partial<Record<Genre, number>> = { detroit: 0.95 }
+const GENRE_LEAD_GAIN: Partial<Record<Genre, number>> = { detroit: 0.7 }
+
 export class AuraPlayer {
   private synths: Tone.ToneAudioNode[] = []
   private padSynth: Tone.ToneAudioNode | null = null
   private analyzers: Tone.Analyser[] = []
-  private master = new Tone.Gain(0.9)
+  private master = new Tone.Gain(0.8)
   private masterAnalyser = new Tone.Analyser('waveform', 1024)
   private compressor = new Tone.Compressor({
-    threshold: -14,
-    ratio: 3,
-    attack: 0.005,
-    release: 0.2,
+    threshold: -12,
+    ratio: 4,
+    attack: 0.01,
+    release: 0.18,
   })
-  private limiter = new Tone.Limiter(-2)
+  private limiter = new Tone.Limiter(-1.5)
   private reverb = new Tone.Freeverb(0.42, 2800)
   private loopSec = 0
   playing = false
 
   constructor() {
-    this.reverb.wet.value = 0.22
+    this.reverb.wet.value = 0.17
     this.master.fan(this.masterAnalyser, this.reverb)
     this.reverb.connect(this.compressor)
     this.master.connect(this.compressor)
@@ -92,7 +101,10 @@ export class AuraPlayer {
     const useBundle = bundle ?? DEFAULT_BUNDLE
     const sampleBus: Tone.Gain[] = []
     let drumLoopPlayer: Tone.Player | null = null
-    const pianoSample = await loadLoopBuffer('loops/piano.wav')
+    // Un solo Tone.Player por archivo de sample (reusado en todos los golpes).
+    // Antes se creaba un Player por nota -> cientos de nodos por vuelta del loop,
+    // underruns, clicks y caída del audio al reproducir varias cosas.
+    const drumPlayers = new Map<string, Tone.Player>()
     if (drums?.loop) {
       const buf = await loadLoopBuffer(drums.loop.file)
       if (buf) {
@@ -112,7 +124,7 @@ export class AuraPlayer {
     }
 
     for (const track of song.tracks) {
-      const voice = this.buildVoice(track, useBundle, song.genre ?? 'trap', pianoSample)
+      const voice = this.buildVoice(track, useBundle, song.genre ?? 'trap')
       const analyser = new Tone.Analyser('waveform', 1024)
       const bus = new Tone.Gain(voice.gain ?? 1)
       voice.root.connect(bus)
@@ -145,22 +157,48 @@ export class AuraPlayer {
           if (sampleFile) {
             const buf = await loadLoopBuffer(sampleFile)
             if (buf && sampleTarget) {
-              const p = new Tone.Player(buf)
-              p.volume.value = SAMPLE_DB[n.note] ?? -4
-              p.connect(sampleTarget)
-              this.synths.push(p)
-              Tone.getTransport().schedule((t) => p.start(t, 0), time)
+              let p = drumPlayers.get(sampleFile)
+              if (!p) {
+                p = new Tone.Player(buf)
+                p.volume.value = SAMPLE_DB[n.note] ?? -4
+                p.connect(sampleTarget)
+                this.synths.push(p)
+                drumPlayers.set(sampleFile, p)
+              }
+              const player = p
+              Tone.getTransport().schedule(
+                (t) => {
+                  try {
+                    player.start(t, 0)
+                  } catch (e) {
+                    console.warn('[AURA] start fallido:', e)
+                  }
+                },
+                time,
+              )
               continue
             }
           }
           Tone.getTransport().schedule(
-            (t) => this.hitDrum(kit, n.note, vel, t),
+            (t) => {
+              try {
+                this.hitDrum(kit, n.note, Math.max(0.05, vel * 0.8), t)
+              } catch (e) {
+                console.warn('[AURA] drum fallido:', e)
+              }
+            },
             time,
           )
         } else {
-          const synth = voice.root as Tone.PolySynth
+          const synth = voice.root as unknown as Tone.PolySynth
           Tone.getTransport().schedule(
-            (t) => synth.triggerAttackRelease([n.note], dur, t, vel),
+            (t) => {
+              try {
+                synth.triggerAttackRelease(midiToHz(n.note), dur, t, vel)
+              } catch (e) {
+                console.warn('[AURA] nota fallida:', e)
+              }
+            },
             time,
           )
         }
@@ -207,17 +245,13 @@ export class AuraPlayer {
     track: Track,
     bundle: SoundBundle,
     genre: Genre,
-    pianoSample?: Tone.ToneAudioBuffer | null,
   ): { root: Tone.ToneAudioNode; kit?: DrumKit; gain?: number } {
     if (track.channel === 9) return this.buildDrumKit(DRUM_KITS[genre])
-    if (track.channel === 1) return { root: buildBass(bundle.bass), gain: 1.1 }
-    if (track.channel === 2) return { root: buildLead(bundle.lead), gain: 1.3 }
-    if (pianoSample) {
-      const sampler = new Tone.Sampler({ release: 1.2 })
-      sampler.add('C4', pianoSample)
-      return { root: sampler, gain: 1.9 }
-    }
-    return { root: buildPiano(bundle.piano), gain: 1.7 }
+    if (track.channel === 1) return { root: buildBass(bundle.bass), gain: GENRE_BASS_GAIN[genre] ?? 0.72 }
+    if (track.channel === 2) return { root: buildLead(bundle.lead), gain: GENRE_LEAD_GAIN[genre] ?? 1.1 }
+    // NOTA: el piano.wav actual (grabado saturado, sin decaimiento: RMS plano -4.8dB
+    // y sin fundamental clara) no sirve como nota de sampler; se usa el piano sintetizado.
+    return { root: buildPiano(bundle.piano), gain: 1.5 }
   }
 
   private schedulePad(chords: Track | undefined, secPerTick: number, padId: string): void {
@@ -228,6 +262,8 @@ export class AuraPlayer {
     this.synths.push(this.padSynth)
 
     // Agrupar el acorde por onset y sostenerlo más corto que el piano.
+    // Umbral de 120 ticks (1 beat): el pad dispara en cambios de acorde,
+    // no en cada golpe del punteo (evita "wash" opaco en reggaetón).
     const sorted = [...chords.notes].sort((a, b) => a.tick - b.tick)
     let group: number[] = []
     let groupTick = 0
@@ -236,7 +272,7 @@ export class AuraPlayer {
       if (group.length === 0) return
       const at = groupTick * secPerTick
       const dur = Math.max(groupDur * secPerTick, 0.4)
-      const vel = 0.24
+      const vel = 0.1
       Tone.getTransport().schedule(
         (t) => synth.triggerAttackRelease(group, dur, t, vel),
         at,
@@ -244,9 +280,10 @@ export class AuraPlayer {
       group = []
     }
     for (const n of sorted) {
-      if (group.length > 0 && n.tick - groupTick > 60) flush()
+      if (group.length > 0 && n.tick - groupTick > 120) flush()
       if (group.length === 0) groupTick = n.tick
-      group.push(n.note)
+      // El pad suena una octava arriba del acorde (evita el "muro grave": bajo+piano+pad).
+      group.push(midiToHz(n.note + 12))
       groupDur = Math.max(groupDur, n.dur)
     }
     flush()
@@ -280,6 +317,7 @@ export class AuraPlayer {
     const hat = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay: profile.hat.decay, sustain: 0.0 },
+      volume: -6,
     })
     hat
       .connect(new Tone.Filter(profile.hat.filter, 'highpass'))
@@ -288,6 +326,7 @@ export class AuraPlayer {
     const openHat = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay: profile.openHat.decay, sustain: 0.0 },
+      volume: -8,
     })
     openHat
       .connect(new Tone.Filter(profile.openHat.filter, 'highpass'))
@@ -321,7 +360,7 @@ export class AuraPlayer {
         vel,
       )
     } else if (node === kit.perc) {
-      kit.perc.triggerAttackRelease(kit.profile.perc.note, kit.profile.perc.decay + 0.03, time, vel)
+      kit.perc.triggerAttackRelease(midiToHz(kit.profile.perc.note), kit.profile.perc.decay + 0.03, time, vel)
     } else {
       const synth = node as Tone.NoiseSynth
       const isHat = note === 42
