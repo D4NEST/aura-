@@ -228,11 +228,11 @@ export function selectProgression(
 ): ProgressionPick {
   const p = PROGRESIONES_BASE[emotion]
   const reales = p.reales ?? []
-  const genreProgs = opts.genre ? GENRE_PROGRESSIONS[opts.genre] : []
+  const genreProgs = opts.genre ? GENRE_PROGRESSIONS[opts.genre].filter((g) => !g.only || g.only.includes(emotion)) : []
   const mutScale = opts.mode ? MODE_SCALES[opts.mode] : ESCALAS[emotion]
   const candidates: { prog: number[]; weight: number; source: ProgressionPick['source'] }[] = [
     { prog: p.principal, weight: 40, source: 'principal' },
-    ...genreProgs.map((prog) => ({ prog, weight: genreProgs.length ? 25 / genreProgs.length : 0, source: 'genre' as const })),
+    ...genreProgs.map((prog) => ({ prog: prog.deg, weight: genreProgs.length ? 25 / genreProgs.length : 0, source: 'genre' as const })),
     ...reales.map((prog) => ({ prog, weight: reales.length ? 22 / reales.length : 0, source: 'real' as const })),
     { prog: p.alternativa, weight: 13, source: 'alternativa' },
   ]

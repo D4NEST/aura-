@@ -1,8 +1,10 @@
 import type { Section, SectionProgression, SongResult, Track, Note, Rng, Mode } from './types'
-import { ESCALAS, DRUM_PATTERNS, DRUM_VARIANTS, DRUM_MAP, NOTE_OFFSETS, VELOCITIES, GROOVE, RANGES, HARMONIC_RHYTHM, CHORD_PULSE, BASS_PATTERNS, FILL_PATTERNS, FILL_WEIGHT_BY_ROLE, PRODUCTION_RECIPES, MODE_SCALES, GENRE_DEFAULT_MODE, VOICE_VELOCITY_DEFAULT } from './constants'
+import { ESCALAS, DRUM_PATTERNS, DRUM_VARIANTS, DRUM_MAP, NOTE_OFFSETS, VELOCITIES, GROOVE, RANGES, HARMONIC_RHYTHM, CHORD_PULSE, BASS_PATTERNS, FILL_PATTERNS, FILL_WEIGHT_BY_ROLE, PRODUCTION_RECIPES, MODE_SCALES, GENRE_DEFAULT_MODE, GENRE_MODE_OVERRIDE, VOICE_VELOCITY_DEFAULT } from './constants'
+import type { PatternPreset } from './constants'
 import {
   noteFromDegree,
   chordFromDegree,
+  applyInversion,
   applyTensionRules,
   selectProgression,
   nearestInversion,
@@ -18,6 +20,7 @@ export function generateSong(
   _tempo = 140,
   ticksPerBeat = 480,
   mode?: Mode,
+  preset?: PatternPreset,
   rng: Rng = Math.random,
 ): SongResult {
   const ticksPer16th = ticksPerBeat / 4
@@ -40,14 +43,17 @@ export function generateSong(
   }
 
   for (const section of songStructure) {
-    // Modo explícito del motor: si está definido (mayor/menor) manda sobre la
-    // emoción; si no, cada género tiene su modo por defecto (matriz de producción).
-    const effectiveMode: Mode = mode ?? GENRE_DEFAULT_MODE[section.genre]
+    // Modo explícito del motor: preset > parámetro > override por (género,emoción) > default.
+    const effectiveMode: Mode =
+      mode ?? preset?.scaleMode ??
+      GENRE_MODE_OVERRIDE[section.genre]?.[section.emotion] ??
+      GENRE_DEFAULT_MODE[section.genre]
     const scale = MODE_SCALES[effectiveMode] ?? ESCALAS[section.emotion]
     const pick = selectProgression(section.emotion, rng, { mode: effectiveMode, genre: section.genre })
-    let progression = pick.progression
+    // Un preset fija la progresión literal (sin mutación armónica aleatoria).
+    let progression = preset ? [...preset.harmony.progression] : pick.progression
     const recipe = PRODUCTION_RECIPES[section.genre]
-    if (recipe?.alternate2 && progression.length > 2) {
+    if (!preset && recipe?.alternate2 && progression.length > 2) {
       // Receta Detroit: 2 acordes que alternan (I–V). El loop de compases
       // recorre la progresión cíclicamente, así [A, B] → A B A B ...
       progression = progression.slice(0, 2)
@@ -59,13 +65,14 @@ export function generateSong(
       genre: section.genre,
       bars: section.bars,
       progression: [...progression],
-      source: pick.source,
-      mutated: pick.mutated,
+      source: preset ? 'preset' : pick.source,
+      mutated: preset ? false : pick.mutated,
     })
     const vels = VELOCITIES[section.genre]
     const groove = GROOVE[section.genre]
     const ranges = RANGES[section.genre]
     const harmonic =
+      preset?.harmony.chordBars ??
       recipe?.chordBarsOverride ??
       chordBarsByRole[section.role ?? ''] ??
       HARMONIC_RHYTHM[section.genre]
@@ -90,15 +97,24 @@ export function generateSong(
         const add11 = isTurnaround && wantTurnaround
         const velBoost = isTurnaround && wantTurnaround ? 10 : 0
 
-        const add7 = section.emotion === 'amor' || section.emotion === 'nostalgia'
-        const add9 = section.emotion === 'tristeza' || section.emotion === 'amor'
+        const add7 = preset ? preset.harmony.addSeventh : section.emotion === 'amor' || section.emotion === 'nostalgia'
+        const add9 = preset ? preset.harmony.addNinth : section.emotion === 'tristeza' || section.emotion === 'amor'
         const rawChord = chordFromDegree(scale, degree, rootOffset, add7, add9, add11)
-        // Voice leading: inversión con el mínimo movimiento de semitonos desde el acorde previo.
-        const voiced = nearestInversion(rawChord, prevChord, rng)
+        // Preset: voicing fijo (OPEN_DROP_2 → drop2 en acordes de 4+, open en triadas).
+        // Normal: voice leading con el mínimo movimiento de semitonos desde el previo.
+        const voicingStyle = preset?.harmony.voicingStyle
+        const voiced = preset && voicingStyle
+          ? applyInversion(rawChord, voicingStyle === 'OPEN_DROP_2'
+              ? rawChord.length >= 4 ? 'drop2' : 'open'
+              : voicingStyle === 'DROP2' ? 'drop2'
+              : voicingStyle === 'OPEN' ? 'open'
+              : 'root')
+          : nearestInversion(rawChord, prevChord, rng)
         const invChord = applyTensionRules(voiced, section.emotion)
         const rootMidi = rawChord[0] & 0x7f
         // Rootless: el bajo/sub-synth sostiene la fundamental; no duplicarla en el acorde.
-        const playChord = recipe?.rootlessVoicing
+        const rootless = preset ? preset.harmony.rootlessHarmonicInstrument : (recipe?.rootlessVoicing ?? false)
+        const playChord = rootless
           ? rootlessVoicing(invChord, rootMidi)
           : invChord
         prevChord = playChord
@@ -158,18 +174,27 @@ export function generateSong(
 
         const bassRaw = noteFromDegree(scale, degree, -1, rootOffset)
         const bassPattern = BASS_PATTERNS[section.genre] ?? BASS_PATTERNS.trap
+        const presetBass = preset?.bass
+        const bassNotes = presetBass?.notes === 'ROOTS'
+          ? [bassRaw]
+          : presetBass && Array.isArray(presetBass.notes)
+            ? presetBass.notes.map((n) => n & 0x7f)
+            : null
 
         // Generar notas de bajo según el patrón del género
         for (let barIdx = 0; barIdx < chordBars; barIdx++) {
-          for (const step of bassPattern.steps) {
+          const stepList = presetBass ? [1] : bassPattern.steps
+          for (const step of stepList) {
             const bassSwing = microOffset(groove.groove.harmony, step - 1, ticksPer16th, groove.humanize, rng)
-            const bassNote = bassPattern.octaveJump && step > 8
-              ? withinRange((bassRaw + 12) & 0x7f, ranges.bass)
-              : withinRange(bassRaw & 0x7f, ranges.bass)
+            const base = presetBass
+              ? (bassNotes as number[])[barIdx % (bassNotes as number[]).length]
+              : bassPattern.octaveJump && step > 8
+                ? withinRange((bassRaw + 12) & 0x7f, ranges.bass)
+                : withinRange(bassRaw & 0x7f, ranges.bass)
             bass.push({
               tick: sectionTick + barIdx * ticksPerBar + (step - 1) * ticksPer16th + bassSwing,
-              dur: Math.max(1, bassPattern.dur16 * ticksPer16th),
-              note: bassNote,
+              dur: Math.max(1, (presetBass?.dur16 ?? bassPattern.dur16) * ticksPer16th),
+              note: withinRange(base, ranges.bass),
               velocity: humanVelocity(vels.bass.mean, vels.bass.jitter, rng),
               // glide se maneja en el engine de audio (MonoSynth portamento)
             })
@@ -179,7 +204,7 @@ export function generateSong(
         lead.push(
           ...generateLead(
             scale, degree, sectionTick, durationTicks, ticksPerBar,
-            section.genre, section.emotion, rootOffset, rng,
+            section.genre, section.emotion, rootOffset, barCount % 4, rng,
           ),
         )
 
@@ -195,7 +220,21 @@ export function generateSong(
     const flavorRoll = rng()
     const useDark = darkMood ? flavorRoll < 0.8 : flavorRoll < 0.25
     const variant = useDark ? DRUM_VARIANTS[section.genre]?.dark : undefined
-    const pattern = { ...(DRUM_PATTERNS[section.genre] ?? DRUM_PATTERNS.trap), ...(variant ?? {}) }
+    const drumRows = preset?.drums
+    let pattern: Record<string, number[]>
+    if (drumRows) {
+      // Preset: grilla de batería literal (pasos → rejilla de 16).
+      const stepRow = (steps?: number[]) =>
+        Array.from({ length: 16 }, (_, i) => (steps?.includes(i + 1) ? 1 : 0) as number)
+      pattern = {
+        kick: stepRow(drumRows.kick),
+        snare: stepRow(drumRows.snare),
+        hat: stepRow(drumRows.hat),
+        open_hat: stepRow(drumRows.open_hat),
+      }
+    } else {
+      pattern = { ...(DRUM_PATTERNS[section.genre] ?? DRUM_PATTERNS.trap), ...(variant ?? {}) }
+    }
     const fillsByGenre = FILL_PATTERNS[section.genre] ?? FILL_PATTERNS.trap
     const fillWeight = FILL_WEIGHT_BY_ROLE[section.role ?? 'estrofa'] ?? 0.5
     const drumTick = currentSectionTick

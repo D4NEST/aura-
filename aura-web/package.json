@@ -20,6 +20,7 @@
     "analyze:drums": "tsx scripts/analyze_drums.ts",
     "analyze:key": "tsx scripts/analyze_key.ts",
     "audit:matrix": "tsx scripts/audit_matrix.ts",
+    "preset:check": "tsx scripts/preset_check.ts",
     "synth:test-loop": "tsx scripts/synth_test_loop.ts"
   },
   "dependencies": {

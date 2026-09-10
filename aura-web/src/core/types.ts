@@ -32,7 +32,7 @@ export interface SectionProgression {
   genre: Genre
   bars: number
   progression: number[]
-  source: 'principal' | 'alternativa' | 'real' | 'genre'
+  source: 'principal' | 'alternativa' | 'real' | 'genre' | 'preset'
   mutated: boolean
 }
 

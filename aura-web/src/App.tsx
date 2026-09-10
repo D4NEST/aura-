@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { generateSong, buildSongMidi, buildStemMidi, downloadMidi } from './core'
 import { buildCasualStructure } from './core/structure'
-import { MOODS_PER_GENRE } from './core/constants'
+import { MOODS_PER_GENRE, PATTERN_PRESETS } from './core/constants'
 import { resolveDrumBank } from './engine/loopBank'
 import type { CasualMode, Emotion, Genre, Section, SongResult, SoundBundle } from './core'
 import { AuraPlayer, type TrackVoice } from './engine/player'
@@ -32,6 +32,14 @@ function trackLabel(track: { channel: number }): string {
     default:
       return 'Acordes'
   }
+}
+
+/** Preset cerrado según (género, mood): el trap romántico usa la armonía del productor. */
+function presetFor(genre: Genre, mood: Emotion) {
+  if (genre !== 'trap') return undefined
+  if (mood === 'amor') return PATTERN_PRESETS.romantic_trap_mayor
+  if (mood === 'tristeza' || mood === 'nostalgia') return PATTERN_PRESETS.romantic_trap_menor
+  return undefined
 }
 
 export default function App() {
@@ -143,7 +151,7 @@ export default function App() {
           ?.tempo ?? tempoRef.current
       const t = tempoTouchedRef.current ? tempoRef.current : moodTempo
       if (!tempoTouchedRef.current) setTempo(moodTempo)
-      const s = generateSong(structure, root, t, 480)
+      const s = generateSong(structure, root, t, 480, undefined, presetFor(genre, mood))
       prepareSong(s, t)
       if (loop) applyLoop(true)
       loopKeyRef.current = { genre, mood, bpm: t }
@@ -166,9 +174,9 @@ export default function App() {
   }, [genre, mood, casualMode, root, loop, prepareSong, applyLoop, player, stopPlayback])
 
   const regenerate = useCallback(() => {
-    const s = generateSong(sections, root, tempo, 480)
+    const s = generateSong(sections, root, tempo, 480, undefined, presetFor(genre, mood))
     prepareSong(s, tempo)
-  }, [sections, root, tempo, prepareSong])
+  }, [sections, root, tempo, prepareSong, genre, mood])
 
   const togglePlay = useCallback(async () => {
     const s = songRef.current

@@ -37,6 +37,11 @@ export const GENRE_DEFAULT_MODE: Record<Genre, Mode> = {
   reggaeton: 'menor', // menor/mayor natural
 }
 
+/** Override por (género, emoción): el trap romántico se abre a mayor (dulce y brillante). */
+export const GENRE_MODE_OVERRIDE: Partial<Record<Genre, Partial<Record<Emotion, Mode>>>> = {
+  trap: { amor: 'mayor' },
+}
+
 export const PROGRESIONES: Record<
   Emotion,
   { principal: number[]; alternativa: number[]; reales: number[][] }
@@ -71,14 +76,26 @@ export const PROGRESIONES: Record<
 /**
  * Progresiones "clave" por género, de la matriz de producción del productor
  * (grados de escala: i=1, bII=2, III=3, iv=4, v=5, bVI/VI=6, bVII/VII=7).
- * Se integran como fuente de selección con peso, junto a principal/alternativa/reales.
+ * `only` restringe la progresión a ciertas emociones (las cromáticas de tensión
+ * se reservan para ira; no entran en moods románticos → evita disonancias).
  */
-export const GENRE_PROGRESSIONS: Record<Genre, number[][]> = {
-  trap: [[1, 6], [1, 2, 1], [1, 5, 6, 4]], // i-VI · i-bII-i · i-v-VI-IV
-  rap: [[2, 5, 1], [1, 4]], // ii7-V7-i7 · i7-IV7
-  plug: [[4, 3, 6], [4, 5, 3, 6]], // IVmaj7-iii7-vi7 · IVmaj7-V7-iii7-vi7
-  detroit: [[1, 6, 7], [1, 2, 1]], // i-bVI-bVII · riff cromático i-bII-i
-  reggaeton: [[1, 6, 3, 7], [1, 4, 7, 3], [1, 7, 6, 5]], // i-VI-III-VII · i-iv-VII-III · i-VII-VI-V
+export interface GenreProgression {
+  deg: number[]
+  only?: Emotion[]
+}
+
+export const GENRE_PROGRESSIONS: Record<Genre, GenreProgression[]> = {
+  trap: [
+    { deg: [1, 6] }, // i-VI
+    { deg: [1, 5, 6, 4] }, // i-v-VI-IV
+    { deg: [1, 6, 3, 7] }, // i7-VI-III-VII (nostálgico/urbano, A menor)
+    { deg: [4, 3, 6, 5], only: ['amor', 'tristeza'] }, // IVmaj7-iii7-vi7-V (romántico, A mayor)
+    { deg: [1, 2, 1], only: ['ira'] }, // i-bII-i cromático (solo tensión)
+  ],
+  rap: [{ deg: [2, 5, 1] }, { deg: [1, 4] }], // ii7-V7-i7 · i7-IV7
+  plug: [{ deg: [4, 3, 6] }, { deg: [4, 5, 3, 6] }], // IVmaj7-iii7-vi7 · IVmaj7-V7-iii7-vi7
+  detroit: [{ deg: [1, 6, 7] }, { deg: [1, 2, 1] }], // i-bVI-bVII · riff cromático i-bII-i
+  reggaeton: [{ deg: [1, 6, 3, 7] }, { deg: [1, 4, 7, 3] }, { deg: [1, 7, 6, 5] }], // i-VI-III-VII · i-iv-VII-III · i-VII-VI-V
 }
 
 export const DRUM_PATTERNS: Record<Genre, Record<string, number[]>> = {
@@ -125,9 +142,15 @@ export const DRUM_PATTERNS: Record<Genre, Record<string, number[]>> = {
  * La base queda four-on-floor (verificada 100% coherente contra el catálogo
  * real) y se usa para moods de energía (ira, amor). Celdas ausentes = base.
  */
-export const DRUM_VARIANTS: Partial<Record<Genre, Record<'dark', Record<string, number[]>>>> = {
+export const DRUM_VARIANTS: Partial<Record<Genre, Partial<Record<'dark' | 'romantic', Record<string, number[]>>>>> = {
   trap: {
     dark: { kick: [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0] }, // 1, 8, 11
+    romantic: {
+      kick: [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0], // 1, 7, 11
+      snare: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], // clap fijo en 9
+      hat: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], // 1/8 continuo
+      open_hat: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1], // mini rolls 1/32 en 8 y 16
+    },
   },
   rap: {
     dark: { kick: [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0] }, // 1, 3, 11
@@ -504,6 +527,82 @@ export interface SoundDesignConfig {
   texture: 'CLEAN' | 'VINYL_CRACKLE' | 'TAPE_DETUNE' | 'BITCRUSHED'
   cutoff_hz?: number
   detune_lfo_depth?: 'NONE' | 'LOW' | 'MEDIUM'
+}
+
+/**
+ * Preset de patrón completo (contrato del backend JSON): una receta cerrada con
+ * progresión, voicing, raíces de bajo y grilla de batería. El motor puede generar
+ * directamente con un preset (todo literal, sin mutación aleatoria armonica).
+ */
+export interface PatternPreset {
+  genre: string
+  bpm?: number
+  scaleMode: Mode
+  harmony: {
+    progression: number[]
+    roman?: string[]
+    addSeventh: boolean
+    addNinth: boolean
+    voicingStyle: 'OPEN' | 'DROP2' | 'OPEN_DROP_2' | 'ROOT'
+    chordBars: number[]
+    rootlessHarmonicInstrument: boolean
+  }
+  bass: {
+    notes: number[] | 'ROOTS'
+    glide: boolean
+    dur16: number
+  }
+  drums?: {
+    kick?: number[]
+    snare?: number[]
+    hat?: number[]
+    open_hat?: number[]
+  }
+}
+
+export const PATTERN_PRESETS: Record<string, PatternPreset> = {
+  // Trap romántico A mayor: IVmaj7 - iii7 - vi7 - V (dulce y brillante)
+  romantic_trap_mayor: {
+    genre: 'romantic_trap',
+    bpm: 128,
+    scaleMode: 'mayor',
+    harmony: {
+      progression: [4, 3, 6, 5],
+      roman: ['IVmaj7', 'iii7', 'vi7', 'V'],
+      addSeventh: true,
+      addNinth: false,
+      voicingStyle: 'OPEN_DROP_2',
+      chordBars: [1, 1, 1, 1],
+      rootlessHarmonicInstrument: true,
+    },
+    bass: {
+      notes: [38, 37, 42, 40], // D2 C#2 F#2 E2 (fundamentales exactas)
+      glide: false,
+      dur16: 4, // legato largo, decay suave
+    },
+    drums: { kick: [1, 7, 11], snare: [9], hat: [1, 3, 5, 7, 9, 11, 13, 15], open_hat: [8, 16] },
+  },
+  // Trap romántico A menor: i7 - VImaj7 - IIImaj7 - VII (nostálgico/urbano)
+  romantic_trap_menor: {
+    genre: 'romantic_trap',
+    bpm: 128,
+    scaleMode: 'menor',
+    harmony: {
+      progression: [1, 6, 3, 7],
+      roman: ['i7', 'VImaj7', 'IIImaj7', 'VII'],
+      addSeventh: true,
+      addNinth: false,
+      voicingStyle: 'OPEN',
+      chordBars: [1, 1, 1, 1],
+      rootlessHarmonicInstrument: true,
+    },
+    bass: {
+      notes: [45, 41, 36, 43], // A2 F2 C2 G2
+      glide: false,
+      dur16: 4,
+    },
+    drums: { kick: [1, 7, 11], snare: [9], hat: [1, 3, 5, 7, 9, 11, 13, 15], open_hat: [8, 16] },
+  },
 }
 
 export const PRODUCTION_RECIPES: Partial<Record<Genre, ProductionRecipe>> = {
