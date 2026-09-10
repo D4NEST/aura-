@@ -1,8 +1,9 @@
 import * as Tone from 'tone'
 import type { Genre, SongResult, SoundBundle, Track } from '../core/types'
-import { buildPiano, buildPad, buildBass, buildLead } from './sounds'
+import { buildPiano, buildPad, buildBass, buildLead, designExt } from './sounds'
 import { DRUM_KITS, type DrumKitProfile } from './drumKits'
 import { loadLoopBuffer, type DrumBank, type DrumKitFiles } from './loopBank'
+import { PRODUCTION_RECIPES, type SoundDesignConfig } from '../core/constants'
 
 export interface TrackVoice {
   analyser: Tone.Analyser
@@ -99,6 +100,7 @@ export class AuraPlayer {
     const tpb = song.ticksPerBeat
     const secPerTick = 1 / tpb / (tempo / 60)
     const useBundle = bundle ?? DEFAULT_BUNDLE
+    const design = PRODUCTION_RECIPES[song.genre ?? 'trap']?.soundDesign
     const sampleBus: Tone.Gain[] = []
     let drumLoopPlayer: Tone.Player | null = null
     // Un solo Tone.Player por archivo de sample (reusado en todos los golpes).
@@ -124,10 +126,18 @@ export class AuraPlayer {
     }
 
     for (const track of song.tracks) {
-      const voice = this.buildVoice(track, useBundle, song.genre ?? 'trap')
+      const voice = this.buildVoice(track, useBundle, song.genre ?? 'trap', design)
       const analyser = new Tone.Analyser('waveform', 1024)
       const bus = new Tone.Gain(voice.gain ?? 1)
-      voice.root.connect(bus)
+      // Con diseño de sonido por género, la señal sale por el último nodo de la
+      // cadena (saturación/filtro); el instrumento sigue siendo el disparable.
+      const ext = designExt(voice.root)
+      if (ext) {
+        for (const n of ext.dispose) this.synths.push(n)
+        ext.out.connect(bus)
+      } else {
+        voice.root.connect(bus)
+      }
       bus.fan(analyser, this.master)
       this.synths.push(voice.root, bus)
       this.analyzers.push(analyser)
@@ -206,7 +216,7 @@ export class AuraPlayer {
     }
 
     if (padEnabled) {
-      this.schedulePad(song.tracks[0] ?? song.tracks[1], secPerTick, useBundle.pad)
+      this.schedulePad(song.tracks[0] ?? song.tracks[1], secPerTick, useBundle.pad, design)
     }
 
     if (this.loopSec > 0) {
@@ -245,20 +255,28 @@ export class AuraPlayer {
     track: Track,
     bundle: SoundBundle,
     genre: Genre,
+    design?: SoundDesignConfig,
   ): { root: Tone.ToneAudioNode; kit?: DrumKit; gain?: number } {
     if (track.channel === 9) return this.buildDrumKit(DRUM_KITS[genre])
-    if (track.channel === 1) return { root: buildBass(bundle.bass), gain: GENRE_BASS_GAIN[genre] ?? 0.72 }
-    if (track.channel === 2) return { root: buildLead(bundle.lead), gain: GENRE_LEAD_GAIN[genre] ?? 1.1 }
+    if (track.channel === 1) return { root: buildBass(bundle.bass, design), gain: GENRE_BASS_GAIN[genre] ?? 0.72 }
+    if (track.channel === 2) return { root: buildLead(bundle.lead, design), gain: GENRE_LEAD_GAIN[genre] ?? 1.1 }
     // NOTA: el piano.wav actual (grabado saturado, sin decaimiento: RMS plano -4.8dB
     // y sin fundamental clara) no sirve como nota de sampler; se usa el piano sintetizado.
-    return { root: buildPiano(bundle.piano), gain: 1.5 }
+    return { root: buildPiano(bundle.piano, design), gain: 1.5 }
   }
 
-  private schedulePad(chords: Track | undefined, secPerTick: number, padId: string): void {
+  private schedulePad(chords: Track | undefined, secPerTick: number, padId: string, design?: SoundDesignConfig): void {
     if (!chords) return
-    this.padSynth = buildPad(padId)
+    this.padSynth = buildPad(padId, design)
     const synth = this.padSynth as Tone.PolySynth
-    synth.fan(this.master)
+    // Con diseño de sonido, conectar la salida de la cadena al master.
+    const ext = designExt(this.padSynth)
+    if (ext) {
+      for (const n of ext.dispose) this.synths.push(n)
+      ext.out.fan(this.master)
+    } else {
+      synth.fan(this.master)
+    }
     this.synths.push(this.padSynth)
 
     // Agrupar el acorde por onset y sostenerlo más corto que el piano.
